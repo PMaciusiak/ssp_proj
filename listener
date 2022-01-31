@@ -1,0 +1,383 @@
+package pl.edu.agh.kt;
+
+import java.util.Collection;
+import java.util.Map;
+
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.types.IpProtocol;
+import org.projectfloodlight.openflow.types.OFPort;
+
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IOFMessageListener;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.module.FloodlightModuleContext;
+import net.floodlightcontroller.core.module.FloodlightModuleException;
+import net.floodlightcontroller.core.module.IFloodlpackage pl.edu.agh.kt;
+
+import java.util.Collection;
+import java.util.Map;
+
+import org.projectfloodlight.openflow.protocol.OFMessage;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFType;
+import org.projectfloodlight.openflow.types.IpProtocol;
+import org.projectfloodlight.openflow.types.OFPort;
+
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IOFMessageListener;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.module.FloodlightModuleContext;
+import net.floodlightcontroller.core.module.FloodlightModuleException;
+import net.floodlightcontroller.core.module.IFloodlightModule;
+import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.packet.Data;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.TCP;
+import net.floodlightcontroller.packet.UDP;
+
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPacketOut;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.IpProtocol;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
+import org.projectfloodlight.openflow.types.TransportPort;
+import org.projectfloodlight.openflow.types.VlanVid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import java.util.ArrayList;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class SdnLabListener implements IFloodlightModule, IOFMessageListener {
+
+	protected IFloodlightProviderService floodlightProvider;
+	protected static Logger logger;
+
+	@Override
+	public String getName() {
+		return SdnLabListener.class.getSimpleName();
+	}
+
+	@Override
+	public boolean isCallbackOrderingPrereq(OFType type, String name) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isCallbackOrderingPostreq(OFType type, String name) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg,
+			FloodlightContext cntx) {
+
+		logger.info("************* NEW PACKET IN *************");
+		
+		PacketExtractor extractor = new PacketExtractor();
+		extractor.packetExtract(cntx);
+		
+		OFPacketIn pin = (OFPacketIn) msg;
+		Ethernet eth = extractor.getEth();
+		if (eth.getEtherType()!= EthType.ARP && eth.getEtherType() != EthType.IPv4) {
+			return Command.STOP;
+		}
+		IPv4 ip = extractor.getIPv4();
+		
+		// TODO LAB 6
+
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:01")) {
+			if(pin.getInPort()== OFPort.of(1)){
+				if(ip==null){ //zakladamy ze przyszedl arp i akceptujemy 
+					OFPort outPort = OFPort.of(2);
+					Flows.simpleAdd2(sw, pin, cntx, outPort);
+					Flows.sendPacketOut(sw, eth, outPort);
+				}
+				else {
+					if(ip.getProtocol().equals(IpProtocol.UDP)){
+						OFPort outPort = OFPort.of(4);
+						Flows.simpleAdd(sw, pin, cntx, outPort );
+						Flows.sendPacketOut(sw, eth, outPort);
+					}
+					else {
+						OFPort outPort = OFPort.of(2);
+						Flows.simpleAdd2(sw, pin, cntx, outPort);
+						Flows.sendPacketOut(sw, eth, outPort);
+					}
+				}
+			}
+					
+				
+			else {	
+				OFPort outPort= OFPort.of(1);
+				Flows.simpleAdd2(sw, pin, cntx, outPort);
+				Flows.sendPacketOut(sw, eth, outPort);
+			}
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:02")){
+			OFPort outPort = OFPort.of(2); //s2->s4 eth2
+			Flows.simpleAdd(sw, pin, cntx, outPort );
+			Flows.sendPacketOut(sw, eth, outPort);
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:03")){
+			OFPort outPort = OFPort.of(1); //s3->s1 eth1
+			Flows.simpleAdd(sw, pin, cntx, outPort );
+			Flows.sendPacketOut(sw, eth, outPort);
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:04")){
+			if(pin.getInPort()== OFPort.of(4)){
+				if(ip==null){ //zakladamy ze przyszedl arp i akceptujemy 
+					OFPort outPort = OFPort.of(3); //do s3
+					Flows.simpleAdd2(sw, pin, cntx, outPort);
+					Flows.sendPacketOut(sw, eth, outPort);
+				}
+				else {
+					if(ip.getProtocol().equals(IpProtocol.UDP)){
+						OFPort outPort = OFPort.of(1); //eth1 s4->s1
+						Flows.simpleAdd(sw, pin, cntx, outPort );
+						Flows.sendPacketOut(sw, eth, outPort);
+					}
+					else {
+						OFPort outPort = OFPort.of(3); //s4->s3 eth3
+						Flows.simpleAdd2(sw, pin, cntx, outPort);
+						Flows.sendPacketOut(sw, eth, outPort);
+					}
+				}
+			}
+			else {	
+				OFPort outPort= OFPort.of(4);    //jezeli przyszlo z jakiegokolwiek innego portu to wyslij do hosta
+				Flows.simpleAdd2(sw, pin, cntx, outPort);
+				Flows.sendPacketOut(sw, eth, outPort);
+			}
+		}
+		
+
+		return Command.STOP;
+	}
+
+	@Override
+	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
+		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+		l.add(IFloodlightProviderService.class);
+		return l;
+	}
+
+	@Override
+	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
+		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+		logger = LoggerFactory.getLogger(SdnLabListener.class);
+	}
+
+	@Override
+	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
+		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+		logger.info("******************* START **************************");
+
+	}
+
+}
+ightModule;
+import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.packet.Data;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.TCP;
+import net.floodlightcontroller.packet.UDP;
+
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.OFPacketIn;
+import org.projectfloodlight.openflow.protocol.OFPacketOut;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
+import org.projectfloodlight.openflow.protocol.match.Match;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.IpProtocol;
+import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.types.OFVlanVidMatch;
+import org.projectfloodlight.openflow.types.TransportPort;
+import org.projectfloodlight.openflow.types.VlanVid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import java.util.ArrayList;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class SdnLabListener implements IFloodlightModule, IOFMessageListener {
+
+	protected IFloodlightProviderService floodlightProvider;
+	protected static Logger logger;
+
+	@Override
+	public String getName() {
+		return SdnLabListener.class.getSimpleName();
+	}
+
+	@Override
+	public boolean isCallbackOrderingPrereq(OFType type, String name) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isCallbackOrderingPostreq(OFType type, String name) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public net.floodlightcontroller.core.IListener.Command receive(IOFSwitch sw, OFMessage msg,
+			FloodlightContext cntx) {
+
+		logger.info("************* NEW PACKET IN *************");
+		
+		PacketExtractor extractor = new PacketExtractor();
+		extractor.packetExtract(cntx);
+		
+		OFPacketIn pin = (OFPacketIn) msg;
+		Ethernet eth = extractor.getEth();
+		if (eth.getEtherType()!= EthType.ARP && eth.getEtherType() != EthType.IPv4) {
+			return Command.STOP;
+		}
+		IPv4 ip = extractor.getIPv4();
+		
+		// TODO LAB 6
+
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:01")) {
+			if(pin.getInPort()== OFPort.of(1)){
+				if(ip==null){ //zakladamy ze przyszedl arp i akceptujemy 
+					OFPort outPort = OFPort.of(2);
+					Flows.simpleAdd2(sw, pin, cntx, outPort);
+				}
+				else {
+					if(ip.getProtocol().equals(IpProtocol.UDP)){
+						OFPort outPort = OFPort.of(4);
+						Flows.simpleAdd(sw, pin, cntx, outPort );
+					}
+					else {
+						OFPort outPort = OFPort.of(2);
+						Flows.simpleAdd2(sw, pin, cntx, outPort);
+					}
+				}
+			}
+					
+				
+			else {	
+				OFPort outPort= OFPort.of(1);
+				Flows.simpleAdd2(sw, pin, cntx, outPort);
+			}
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:02")){
+			OFPort outPort = OFPort.of(2); //s2->s4 eth2
+			Flows.simpleAdd(sw, pin, cntx, outPort );
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:03")){
+			OFPort outPort = OFPort.of(1); //s3->s1 eth1
+			Flows.simpleAdd(sw, pin, cntx, outPort );
+		}
+		
+		if (sw.getId().toString().matches("00:00:00:00:00:00:00:04")){
+			if(pin.getInPort()== OFPort.of(4)){
+				if(ip==null){ //zakladamy ze przyszedl arp i akceptujemy 
+					OFPort outPort = OFPort.of(3); //do s3
+					Flows.simpleAdd2(sw, pin, cntx, outPort);
+				}
+				else {
+					if(ip.getProtocol().equals(IpProtocol.UDP)){
+						OFPort outPort = OFPort.of(1); //eth1 s4->s1
+						Flows.simpleAdd(sw, pin, cntx, outPort );
+					}
+					else {
+						OFPort outPort = OFPort.of(3); //s4->s3 eth3
+						Flows.simpleAdd2(sw, pin, cntx, outPort);
+					}
+				}
+			}
+			else {	
+				OFPort outPort= OFPort.of(4);    //jezeli przyszlo z jakiegokolwiek innego portu to wyslij do hosta
+				Flows.simpleAdd2(sw, pin, cntx, outPort);
+			}
+		}
+		
+
+		return Command.STOP;
+	}
+
+	@Override
+	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
+		Collection<Class<? extends IFloodlightService>> l = new ArrayList<Class<? extends IFloodlightService>>();
+		l.add(IFloodlightProviderService.class);
+		return l;
+	}
+
+	@Override
+	public void init(FloodlightModuleContext context) throws FloodlightModuleException {
+		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+		logger = LoggerFactory.getLogger(SdnLabListener.class);
+	}
+
+	@Override
+	public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
+		floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+		logger.info("******************* START **************************");
+
+	}
+
+}
+
